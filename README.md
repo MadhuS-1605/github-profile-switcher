@@ -66,7 +66,7 @@ echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
 
 ```bash
 # Add your accounts
-ghswitch add          # prompts: name, email, SSH key, GPG key, gh host
+ghswitch add          # prompts: name, email, SSH key, GPG key, gh token, gh host
 
 # See all profiles
 ghswitch list
@@ -106,6 +106,7 @@ ghswitch personal
 | SSH key | `core.sshCommand` | Forces specific key with `IdentitiesOnly=yes` |
 | SSH agent | *(runtime)* | Adds key to agent if socket is active |
 | GPG signing | `user.signingKey` + `commit.gpgSign` | Signed commits with your key |
+| GitHub Token | `credential.helper` / `gh` CLI | Auth for Git over HTTPS and logs into `gh` |
 | gh CLI | *(runtime check)* | Verifies `gh auth status` for the configured host |
 
 ---
@@ -120,6 +121,7 @@ name=Jane Doe
 email=jane@company.com
 ssh_key=~/.ssh/id_ed25519_work
 gpg_key=ABCD1234
+gh_token=ghp_...
 gh_host=github.com
 
 [personal]

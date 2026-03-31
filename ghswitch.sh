@@ -160,6 +160,7 @@ apply_profile() {
   email=$(get_field "$profile" "email")
   ssh_key=$(get_field "$profile" "ssh_key")
   gpg_key=$(get_field "$profile" "gpg_key")
+  gh_token=$(get_field "$profile" "gh_token")
   gh_host=$(get_field "$profile" "gh_host")
   gh_host="${gh_host:-github.com}"
 
@@ -197,7 +198,19 @@ apply_profile() {
     fi
   fi
 
-  if $HAS_GH; then
+  if [ -n "$gh_token" ]; then
+    git config --"$scope" credential."https://${gh_host}".helper "!f() { echo \"username=git\"; echo \"password=${gh_token}\"; }; f"
+    ok "git token = configured via credential.helper"
+    if $HAS_GH; then
+      if printf "%s" "$gh_token" | gh auth login --with-token --hostname "$gh_host" >/dev/null 2>&1; then
+        ok "gh token  = authenticated for $gh_host"
+      else
+        warn "gh token  = failed to authenticate gh CLI"
+      fi
+    else
+      info "gh CLI missing, token applied only to git HTTPS"
+    fi
+  elif $HAS_GH; then
     if gh auth status --hostname "$gh_host" >/dev/null 2>&1; then
       ok "gh CLI    = authenticated on $gh_host"
     else
@@ -233,12 +246,14 @@ add_profile() {
   ask "Email:";                                                      read -r pemail
   ask "SSH key path (blank to skip, e.g. ~/.ssh/id_ed25519_work):";  read -r pssh
   ask "GPG key ID (blank to skip):";                                 read -r pgpg
+  ask "GitHub Token (blank to skip):";                               read -r ptoken
   ask "GitHub host (Enter = github.com):";                           read -r phost
   phost="${phost:-github.com}"
 
   printf '\n[%s]\nname=%s\nemail=%s\n' "$pname" "$pname_full" "$pemail" >> "${CONFIG_FILE}"
   [ -n "$pssh" ] && printf 'ssh_key=%s\n' "$pssh" >> "${CONFIG_FILE}"
   [ -n "$pgpg" ] && printf 'gpg_key=%s\n' "$pgpg" >> "${CONFIG_FILE}"
+  [ -n "$ptoken" ] && printf 'gh_token=%s\n' "$ptoken" >> "${CONFIG_FILE}"
   printf 'gh_host=%s\n' "$phost" >> "${CONFIG_FILE}"
 
   ok "Profile '$pname' saved."
@@ -265,7 +280,8 @@ list_profiles() {
     [ -z "$p" ] && continue
     n=$(get_field "$p" "name");    e=$(get_field "$p" "email")
     s=$(get_field "$p" "ssh_key"); g=$(get_field "$p" "gpg_key")
-    h=$(get_field "$p" "gh_host"); mark=''
+    t=$(get_field "$p" "gh_token"); h=$(get_field "$p" "gh_host")
+    mark=''
     [ "$p" = "$active" ] && mark="  ${GREEN}${BOLD}← active${RESET}"
 
     printf "\n  ${BOLD}${CYAN}[%s]${RESET}" "$p"; printf "%b\n" "$mark"
@@ -273,6 +289,7 @@ list_profiles() {
     printf "    ${DIM}email :${RESET} %s\n" "$e"
     [ -n "$s" ] && printf "    ${DIM}ssh   :${RESET} %s\n" "$s"
     [ -n "$g" ] && printf "    ${DIM}gpg   :${RESET} %s\n" "$g"
+    [ -n "$t" ] && printf "    ${DIM}token :${RESET} [configured]\n"
     [ -n "$h" ] && printf "    ${DIM}host  :${RESET} %s\n" "$h"
   done <<PROFILES
 $profiles
@@ -419,6 +436,12 @@ unset_global() {
       git config --global --unset core.sshCommand 2>/dev/null && ok "Cleared core.sshCommand" || true
       git config --global --unset user.signingKey 2>/dev/null && ok "Cleared user.signingKey" || true
       git config --global --unset commit.gpgSign  2>/dev/null && ok "Cleared commit.gpgSign"  || true
+      
+      active=$(get_active)
+      gh_host="github.com"
+      [ -n "$active" ] && h=$(get_field "$active" "gh_host") && [ -n "$h" ] && gh_host="$h"
+      git config --global --unset-all credential."https://${gh_host}".helper 2>/dev/null && ok "Cleared credential.helper for ${gh_host}" || true
+      
       printf '' > "${ACTIVE_FILE}"
       ok "Global identity cleared."
       ;;
